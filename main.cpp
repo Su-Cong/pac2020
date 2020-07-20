@@ -127,10 +127,10 @@ double logDataVSPrior(const double* dat_r, const double* dat_i, const double* pr
 	
     //calculation
     __m512d r = _mm512_fnmadd_pd(ctf_v, pri_r_v, dat_r_v);
-    __m512d i = _mm512_fnmadd_pd(ctf_v, pri_i_v, dat_i_v);
+    __m512d im = _mm512_fnmadd_pd(ctf_v, pri_i_v, dat_i_v);
     r = _mm512_mul_pd(r, r);
-    i = _mm512_mul_pd(i, i);
-    r = _mm512_add_pd(r, i);
+    im = _mm512_mul_pd(im, im);
+    r = _mm512_add_pd(r, im);
     result += _mm512_reduce_add_pd(_mm512_mul_pd(r, sig_v));
     }
 //     for (int i = 0; i < num; i++)
