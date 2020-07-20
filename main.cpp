@@ -122,7 +122,7 @@ double logDataVSPrior(const double* dat_r, const double* dat_i, const double* pr
     __m512d dat_i_v = _mm512_loadu_pd(dat_i + i);
     __m512d pri_r_v = _mm512_loadu_pd(pri_r + i);
     __m512d pri_i_v = _mm512_loadu_pd(pri_i + i);
-    __m512d ctf_v = _mm512_loadu_pd(ctf_v + i);
+    __m512d ctf_v = _mm512_loadu_pd(ctf + i);
     __m512d sig_v = _mm512_loadu_pd(sigRcp + i);
 	
     //calculation
