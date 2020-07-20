@@ -20,7 +20,7 @@ typedef chrono::high_resolution_clock Clock;
 const int m=1638400;	// DO NOT CHANGE!!
 const int K=100000;	// DO NOT CHANGE!!
 
-double logDataVSPrior(const Complex* dat, const Complex* pri, const double* ctf, const double* sigRcp, const int num, const double disturb0);
+double logDataVSPrior(const double* dat_r, const double* dat_i, const double* pri_r, const double* pri_i, const double* ctf, const double* sigRcp, const int num, const double disturb0);
 
 int main ( int argc, char *argv[] )
 { 
@@ -92,7 +92,7 @@ int main ( int argc, char *argv[] )
 #pragma omp parallel for schedule(dynamic)
     for(unsigned int t = 0; t < K; t++)
     {
-        double result = logDataVSPrior(dat, pri, ctf, sigRcp, m, disturb[t]);
+        double result = logDataVSPrior(dat_r, dat_i, pri_r, pri_i, ctf, sigRcp, m, disturb[t]);
         fout << t+1 << ": " << result << endl;
     }
     fout.close();
@@ -113,9 +113,11 @@ int main ( int argc, char *argv[] )
     return EXIT_SUCCESS;
 }
 
-double logDataVSPrior(const Complex* dat, const Complex* pri, const double* ctf, const double* sigRcp, const int num, const double disturb0)
+double logDataVSPrior(const double* dat_r, const double* dat_i, const double* pri_r, const double* pri_i, const double* ctf, const double* sigRcp, const int num, const double disturb0)
 {
     double result = 0.0;
+    for(int i = 0; i < num; i+=8)
+    {
     __m512d dat_r_v = _mm512_loadu_pd(dat_r + i);
     __m512d dat_i_v = _mm512_loadu_pd(dat_i + i);
     __m512d pri_r_v = _mm512_loadu_pd(pri_r + i);
@@ -130,7 +132,7 @@ double logDataVSPrior(const Complex* dat, const Complex* pri, const double* ctf,
     i = _mm512_mul_pd(i, i);
     r = _mm512_add_pd(r, i);
     result += _mm512_reduce_add_pd(_mm512_mul_pd(r, sig_v));
-	
+    }
 //     for (int i = 0; i < num; i++)
 //     {
 
