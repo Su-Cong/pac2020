@@ -6,13 +6,15 @@
 #include <stdio.h>
 #include <iostream>
 #include <fstream>
-#include <complex>
+//#include <complex>
 #include <chrono>
-#include "omp.h" 
+#include <omp.h>
+#include <immintrin.h>
+#include <xmmintrin.h>
 
 using namespace std;
 
-typedef complex<double> Complex;
+//typedef complex<double> Complex;
 typedef chrono::high_resolution_clock Clock;
 
 const int m=1638400;	// DO NOT CHANGE!!
@@ -22,8 +24,10 @@ double logDataVSPrior(const Complex* dat, const Complex* pri, const double* ctf,
 
 int main ( int argc, char *argv[] )
 { 
-    Complex *dat = new Complex[m];
-    Complex *pri = new Complex[m];
+//    Complex *dat = new Complex[m];
+//    Complex *pri = new Complex[m];
+    double *dat_r = new double[m], *dat_i = new double[m];
+    double *pri_r = new double[m], *pri_i = new double[m];
     double *ctf = new double[m];
     double *sigRcp = new double[m];
     double *disturb = new double[K];
@@ -44,8 +48,12 @@ int main ( int argc, char *argv[] )
     while( !fin.eof() ) 
     {
         fin >> dat0 >> dat1 >> pri0 >> pri1 >> ctf0 >> sigRcp0;
-        dat[i] = Complex (dat0, dat1);
-        pri[i] = Complex (pri0, pri1);
+//         dat[i] = Complex (dat0, dat1);
+//         pri[i] = Complex (pri0, pri1);
+	dat_r[i] = dat0;
+	dat_i[i] = dat1;
+	pri_r[i] = pri0;
+	pri_i[i] = pri1;
         ctf[i] = ctf0;
         sigRcp[i] = sigRcp0;
         i++;
@@ -81,7 +89,7 @@ int main ( int argc, char *argv[] )
          exit(1);
     }
 
-#pragma omp parallel for num_threads(28) schedule(dynamic)
+#pragma omp parallel for schedule(dynamic)
     for(unsigned int t = 0; t < K; t++)
     {
         double result = logDataVSPrior(dat, pri, ctf, sigRcp, m, disturb[t]);
@@ -94,8 +102,10 @@ int main ( int argc, char *argv[] )
     auto compTime = chrono::duration_cast<chrono::microseconds>(endTime - startTime);
     cout << "Computing time=" << compTime.count() << " microseconds" << endl;
 
-    delete[] dat;
-    delete[] pri;
+    delete[] dat_r;
+    delete[] dat_i;
+    delete[] pri_r;
+    delete[] pri_i;
 
     delete[] ctf;
     delete[] sigRcp;
@@ -106,12 +116,26 @@ int main ( int argc, char *argv[] )
 double logDataVSPrior(const Complex* dat, const Complex* pri, const double* ctf, const double* sigRcp, const int num, const double disturb0)
 {
     double result = 0.0;
+    __m512d dat_r_v = _mm512_loadu_pd(dat_r + i);
+    __m512d dat_i_v = _mm512_loadu_pd(dat_i + i);
+    __m512d pri_r_v = _mm512_loadu_pd(pri_r + i);
+    __m512d pri_i_v = _mm512_loadu_pd(pri_i + i);
+    __m512d ctf_v = _mm512_loadu_pd(ctf_v + i);
+    __m512d sig_v = _mm512_loadu_pd(sigRcp + i);
+	
+    //calculation
+    __m512d r = _mm512_fnmadd_pd(ctf_v, pri_r_v, dat_r_v);
+    __m512d i = _mm512_fnmadd_pd(ctf_v, pri_i_v, dat_i_v);
+    r = _mm512_mul_pd(r, r);
+    i = _mm512_mul_pd(i, i);
+    r = _mm512_add_pd(r, i);
+    result += _mm512_reduce_add_pd(_mm512_mul_pd(r, sig_v));
+	
+//     for (int i = 0; i < num; i++)
+//     {
 
-    for (int i = 0; i < num; i++)
-    {
+//           result += ( norm( dat[i] - ctf[i] * pri[i] ) * sigRcp[i] );
 
-          result += ( norm( dat[i] - ctf[i] * pri[i] ) * sigRcp[i] );
-
-    }
+//     }
     return result*disturb0;
 }
