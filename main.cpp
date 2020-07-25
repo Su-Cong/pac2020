@@ -31,6 +31,7 @@ int main ( int argc, char *argv[] )
     double *ctf = new double[m];
     double *sigRcp = new double[m];
     double *disturb = new double[K];
+    double *res = new double[K];
     double dat0, dat1, pri0, pri1, ctf0, sigRcp0;
 
     /***************************
@@ -48,12 +49,12 @@ int main ( int argc, char *argv[] )
     while( !fin.eof() ) 
     {
         fin >> dat0 >> dat1 >> pri0 >> pri1 >> ctf0 >> sigRcp0;
-//         dat[i] = Complex (dat0, dat1);
-//         pri[i] = Complex (pri0, pri1);
-	dat_r[i] = dat0;
-	dat_i[i] = dat1;
-	pri_r[i] = pri0;
-	pri_i[i] = pri1;
+//        dat[i] = Complex (dat0, dat1);
+//        pri[i] = Complex (pri0, pri1);
+        dat_r[i] = dat0;
+	    dat_i[i] = dat1;
+		pri_r[i] = pri0;
+		pri_i[i] = pri1;
         ctf[i] = ctf0;
         sigRcp[i] = sigRcp0;
         i++;
@@ -89,11 +90,14 @@ int main ( int argc, char *argv[] )
          exit(1);
     }
 
-#pragma omp parallel for schedule(dynamic)
+#pragma omp parallel for num_threads(96) schedule(static) 
     for(unsigned int t = 0; t < K; t++)
     {
-        double result = logDataVSPrior(dat_r, dat_i, pri_r, pri_i, ctf, sigRcp, m, disturb[t]);
-        fout << t+1 << ": " << result << endl;
+        res[t] = logDataVSPrior(dat_r, dat_i, pri_r, pri_i, ctf, sigRcp, m, disturb[t]);
+    }
+    for(unsigned int t = 0; t < K; t++)
+    {
+        fout << t+1 << ": " << res[t] << endl;
     }
     fout.close();
 
@@ -116,28 +120,39 @@ int main ( int argc, char *argv[] )
 double logDataVSPrior(const double* dat_r, const double* dat_i, const double* pri_r, const double* pri_i, const double* ctf, const double* sigRcp, const int num, const double disturb0)
 {
     double result = 0.0;
+
+    __m512 dis_v = _mm512_set1_pd(disturb0);
     for(int i = 0; i < num; i+=8)
     {
-    __m512d dat_r_v = _mm512_loadu_pd(dat_r + i);
-    __m512d dat_i_v = _mm512_loadu_pd(dat_i + i);
-    __m512d pri_r_v = _mm512_loadu_pd(pri_r + i);
-    __m512d pri_i_v = _mm512_loadu_pd(pri_i + i);
-    __m512d ctf_v = _mm512_loadu_pd(ctf + i);
-    __m512d sig_v = _mm512_loadu_pd(sigRcp + i);
-	
-    //calculation
-    __m512d r = _mm512_fnmadd_pd(ctf_v, pri_r_v, dat_r_v);
-    __m512d im = _mm512_fnmadd_pd(ctf_v, pri_i_v, dat_i_v);
-    r = _mm512_mul_pd(r, r);
-    im = _mm512_mul_pd(im, im);
-    r = _mm512_add_pd(r, im);
-    result += _mm512_reduce_add_pd(_mm512_mul_pd(r, sig_v));
-    }
+    	__m512d dat_r_v = _mm512_loadu_pd(dat_r + i);
+	    __m512d dat_i_v = _mm512_loadu_pd(dat_i + i);
+	    __m512d pri_r_v = _mm512_loadu_pd(pri_r + i);
+	    __m512d pri_i_v = _mm512_loadu_pd(pri_i + i);
+	    __m512d ctf_v = _mm512_loadu_pd(ctf + i);
+	    __m512d sig_v = _mm512_loadu_pd(sigRcp + i);
+	    
+	    //calculation
+	    __m512 mid_v = _mm512_mul_pd(dis_v, ctf_v);
+	    __m512 real = _mm512_fnmadd_pd(mid_v, pri_r_v, dat_r_v);
+	    __m512 imag = _mm512_fnmadd_pd(mid_v, pri_i_v, dat_i_v);
+	    real = _mm512_mul_pd(real, real);
+	    iamg = _mm512_mul_pd(imag, imag);
+	    real = _mm512_add_pd(real, iamg);
+	    result += _mm512_reduce_add_pd(_mm512_mul_pd(real, sig_v));
+	}
+//#pragma ivdep
+//    double r, image;
+//    for (int i = 0; i < num; i++)
+//    {
+//	  r = dat_r[i] - disturb0 * ctf[i] * pri_r[i];
+//	  image = dat_i[i] - disturb0 * ctf[i] * pri_i[i];
+//	  result += r*r*sigRcp[i] + image*image*sigRcp[i];
+//    }
 //     for (int i = 0; i < num; i++)
 //     {
 
-//           result += ( norm( dat[i] - ctf[i] * pri[i] ) * sigRcp[i] );
+//           result += ( norm( dat[i] - disturb0 * ctf[i] * pri[i] ) * sigRcp[i] );
 
 //     }
-    return result*disturb0;
+    return result;
 }
